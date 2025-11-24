@@ -125,83 +125,13 @@ class OrdersController extends Controller
         Notification::route('mail', $admin->email)->notify(new NewOrderNotification($order));
 
         $order->customer->notify(new OrderConfirmationForCustomer($order));
-        if ($request->payment == 2) {
-            return $this->redirectToVnpay($order->totalPrice, $order->orderID);
-        }
+        // if ($request->payment == 2) {
+        //     return $this->redirectToVnpay($order->totalPrice, $order->orderID);
+        // }
 
         return redirect()->route('customerPage')->with('success', 'Đơn hàng đã được tạo thành công!');
     }
-    public function redirectToVnpay($amount, $orderId)
-    {
-        date_default_timezone_set('Asia/Ho_Chi_Minh');
-        $vnp_TmnCode = "NJJ0R8FS";
-        $vnp_HashSecret = "BYKJBHPPZKQMKBIBGGXIYKWYFAYSJXCW";
-        $vnp_Url = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
-        $vnp_Returnurl = route('vnpay.return');
 
-
-        $vnp_TxnRef = $orderId . "_" . time();
-        $vnp_OrderInfo = "Thanh toán đơn hàng #$orderId";
-        $vnp_OrderType = 'billpayment';
-        $vnp_Amount = $amount * 100;
-        $vnp_Locale = 'vn';
-        $vnp_IpAddr = request()->ip();
-        $vnp_ExpireDate = date('YmdHis', strtotime('+15 minutes'));
-
-        $inputData = [
-            "vnp_Version" => "2.1.0",
-            "vnp_TmnCode" => $vnp_TmnCode,
-            "vnp_Amount" => $vnp_Amount,
-            "vnp_Command" => "pay",
-            "vnp_CreateDate" => date('YmdHis'),
-            "vnp_CurrCode" => "VND",
-            "vnp_IpAddr" => $vnp_IpAddr,
-            "vnp_Locale" => $vnp_Locale,
-            "vnp_OrderInfo" => $vnp_OrderInfo,
-            "vnp_OrderType" => $vnp_OrderType,
-            "vnp_ReturnUrl" => $vnp_Returnurl,
-            "vnp_TxnRef" => $vnp_TxnRef,
-            "vnp_ExpireDate" => $vnp_ExpireDate,
-        ];
-        if (isset($vnp_BankCode) && $vnp_BankCode != "") {
-            $inputData['vnp_BankCode'] = $vnp_BankCode;
-        }
-        ksort($inputData);
-        $query = "";
-        $hashdata = "";
-        foreach ($inputData as $key => $value) {
-            $query .= urlencode($key) . "=" . urlencode($value) . "&";
-            $hashdata .= $hashdata ? "&" : "";
-            $hashdata .= urlencode($key) . "=" . urlencode($value);
-        }
-
-        $vnpSecureHash = hash_hmac('sha512', $hashdata, $vnp_HashSecret);
-        $vnp_Url .= "?" . $query . "vnp_SecureHash=" . $vnpSecureHash;
-
-        return redirect($vnp_Url);
-    }
-    public function vnpayReturn(Request $request)
-    {
-
-        if ($request->vnp_ResponseCode == '00') {
-            $txnParts = explode('_', $request->vnp_TxnRef);
-            $orderId = $txnParts[0] ?? null;
-
-            if ($orderId) {
-                $order = Order::find($orderId);
-                if ($order) {
-                    $order->isPayment = true;
-                    $order->save();
-                }
-            }
-
-        if ($request->vnp_ResponseCode == '00') {
-            return redirect()->route('customerPage')->with('success', 'Thanh toán thành công');
-
-        } else {
-            return redirect()->route('customerPage')->with('error', 'Thanh toán thất bại hoặc bị hủy');
-        }
-    }}
 
 
     public function showOrders(Request $request)

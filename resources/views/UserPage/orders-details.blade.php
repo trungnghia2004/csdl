@@ -520,19 +520,7 @@
         </div>
     </div>
 </div>
-<div id="zalo-chat-widget" class="fixed bottom-6 right-6 z-50">
-    <div style="margin-bottom: 12px" id="chat-button" class="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-16 h-16 flex items-center justify-center cursor-pointer shadow-lg transition-all duration-300 hover:scale-110">
-        <a href="https://zalo.me/0946871653">
-            <img src="https://img.icons8.com/?size=100&id=DrWXvmB9ORxE&format=png&color=000000" alt="">
-        </a>
-    </div>
 
-    <div id="chat-button" class="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-16 h-16 flex items-center justify-center cursor-pointer shadow-lg transition-all duration-300 hover:scale-110">
-        <a href="https://www.facebook.com/capybarahdt/">
-            <i class="fab fa-facebook-messenger text-2xl"></i>
-        </a>
-    </div>
-</div>
 <!-- Footer -->
 <footer class="bg-gray-900 text-white pt-12 pb-6">
     <div class="container mx-auto px-4">
@@ -576,7 +564,7 @@
                 <ul class="space-y-2 text-gray-400">
                     <li class="flex items-start">
                         <i class="fas fa-map-marker-alt mt-1 mr-3"></i>
-                        <span>123 Đường ABC, Quận 1, TP.HCM</span>
+                        <span>123 Đường Láng, Đống Đa, TP.HN</span>
                     </li>
                     <li class="flex items-center">
                         <i class="fas fa-phone-alt mr-3"></i>
@@ -591,7 +579,6 @@
         </div>
 
         <div class="border-t border-gray-800 pt-6 flex flex-col md:flex-row justify-between items-center">
-            <p class="text-gray-400 text-sm mb-4 md:mb-0">© 2023 TrendyTeen. All rights reserved.</p>
             <div class="flex space-x-6">
 
             </div>

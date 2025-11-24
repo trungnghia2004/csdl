@@ -12,8 +12,5 @@ class MethodSeeder extends Seeder
         DB::table("payments")->insert([
             "payMethod" => "Thanh toán khi nhận hàng (COD)",
         ]);
-        DB::table("payments")->insert([
-            "payMethod" => "Thanh toán bằng VN Pay",
-        ]);
     }
 }

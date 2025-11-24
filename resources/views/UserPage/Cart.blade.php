@@ -338,13 +338,6 @@
                             Thanh toán an toàn & bảo mật
                         </div>
 
-                        <div class="flex justify-center space-x-4 mt-4">
-                            <!-- Logo các cổng thanh toán -->
-                            <img src="https://imgs.search.brave.com/UA6WKl3ATFm4YMsu5hACT8a8dQXvgjpdOm8TOSA1dYA/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9pbWdz/LnNlYXJjaC5icmF2/ZS5jb20vdTBnMnFO/N0RhUi1HNWZxNk83/WEgzVE90NzkyS3VI/RUZVTVdRVi10Slc2/OC9yczpmaXQ6NTAw/OjA6MDowL2c6Y2Uv/YUhSMGNITTZMeTkx/YzJFdS9kbWx6WVM1/amIyMHZaR0Z0L0wx/WkRUMDB2Y21WbmFX/OXUvWVd3dmJtRXZk/WE12WTI5dC9iVzl1/TFdGemMyVjBjeTlq/L1lYSmtjeTkyYVhO/aExYUnkvWVdScGRH/bHZibUZzTFdOaC9j/bVF0T0RBd2VEUTFN/QzVxL2NHYw" alt="Visa" class="h-6">
-                            <img src="https://imgs.search.brave.com/s3McoP9gfN7d-RHT2qFQz_XxwYqX9gw4GJNdCP5uhso/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9pbWdz/LnNlYXJjaC5icmF2/ZS5jb20vX3hvRU5p/N3dZSmZYZVJ0bjU0/MjlybDdSZFhyaGdU/ajRTMGtqaXNtclgy/MC9yczpmaXQ6NTAw/OjA6MDowL2c6Y2Uv/YUhSMGNITTZMeTlz/YjJkdi9MVzFoY25G/MVpTNWpiMjB2L2Qz/QXRZMjl1ZEdWdWRD/OTEvY0d4dllXUnpM/ekl3TWpBdi9NRFF2/VUdGNVVHRnNMVXh2/L1oyOHROalV3ZURN/Mk5pNXcvYm1j" alt="Mastercard" class="h-6">
-                            <img src="https://imgs.search.brave.com/f0EpIz0f_Y1ePQdO21b5INxC8aRvkGiAw9IzQsmDQzk/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9pbWdz/LnNlYXJjaC5icmF2/ZS5jb20vQ2YzV0Rm/WUVJeE90YkI1SFRj/aWUwS2t3TGxFcEd5/N1lYU2ZMMjJTRk1I/TS9yczpmaXQ6NTAw/OjA6MDowL2c6Y2Uv/YUhSMGNITTZMeTlw/YldGbi9aWE11YzJW/bGEyeHZaMjh1L1ky/OXRMMnh2WjI4dGNH/NW4vTHpReUx6RXZk/bTV3WVhrdC9iRzlu/Ynkxd2JtZGZjMlZs/L2EyeHZaMjh0TkRJ/NE1EQTIvTG5CdVp3" alt="PayPal" class="h-6">
-                            <img src="https://imgs.search.brave.com/CHpwh32l2UbNASSNWIpLdz4GseCuDwwHLQdC8ItUUyc/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9pbWdz/LnNlYXJjaC5icmF2/ZS5jb20vZUQ3Yncz/bXRQWURmTlFOSUhS/YnVGc0QtVnM3cmVV/M1VOMDA3b256d1lm/SS9yczpmaXQ6NTAw/OjA6MDowL2c6Y2Uv/YUhSMGNITTZMeTlq/Wkc0dS9hR0ZwZEhK/cFpYVXVZMjl0L0wz/ZHdMV052Ym5SbGJu/UXYvZFhCc2IyRmtj/eTh5TURJeS9MekV3/TDB4dloyOHRUVzlO/L2J5MURhWEpqYkdV/dWNHNW4" alt="Momo" class="h-6">
-                        </div>
                     </div>
                 </div>
 
@@ -354,20 +347,7 @@
 
         </div>
     </div>
-</main>
-<div id="zalo-chat-widget" class="fixed bottom-6 right-6 z-50">
-    <div style="margin-bottom: 12px" id="chat-button" class="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-16 h-16 flex items-center justify-center cursor-pointer shadow-lg transition-all duration-300 hover:scale-110">
-        <a href="https://zalo.me/0946871653">
-            <img src="https://img.icons8.com/?size=100&id=DrWXvmB9ORxE&format=png&color=000000" alt="">
-        </a>
-    </div>
 
-    <div id="chat-button" class="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-16 h-16 flex items-center justify-center cursor-pointer shadow-lg transition-all duration-300 hover:scale-110">
-        <a href="https://www.facebook.com/capybarahdt/">
-            <i class="fab fa-facebook-messenger text-2xl"></i>
-        </a>
-    </div>
-</div>
 <!-- Footer -->
 <footer class="bg-gray-900 text-white pt-12 pb-6">
     <div class="container mx-auto px-4">
@@ -376,12 +356,6 @@
             <div>
                 <h3 class="text-xl font-bold mb-4">TrendyTeen</h3>
                 <p class="text-gray-400 mb-4">Thương hiệu thời trang trẻ trung, năng động dành cho giới trẻ Việt Nam.</p>
-                <div class="flex space-x-4">
-                    <a href="#" class="text-gray-400 hover:text-white"><i class="fab fa-facebook-f"></i></a>
-                    <a href="#" class="text-gray-400 hover:text-white"><i class="fab fa-instagram"></i></a>
-                    <a href="#" class="text-gray-400 hover:text-white"><i class="fab fa-tiktok"></i></a>
-                    <a href="#" class="text-gray-400 hover:text-white"><i class="fab fa-youtube"></i></a>
-                </div>
             </div>
 
             <!-- Column 2 -->
@@ -426,7 +400,6 @@
         </div>
 
         <div class="border-t border-gray-800 pt-6 flex flex-col md:flex-row justify-between items-center">
-            <p class="text-gray-400 text-sm mb-4 md:mb-0">© 2023 TrendyTeen. All rights reserved.</p>
             <div class="flex space-x-6">
 
             </div>

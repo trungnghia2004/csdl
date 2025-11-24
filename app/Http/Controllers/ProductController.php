@@ -70,6 +70,8 @@ class ProductController extends Controller
             $data['productCode'] = Product::generateProductCode('QAU');
         }elseif (Str::lower($category->categoryName) === 'quần short'){
             $data['productCode'] = Product::generateProductCode('QS');
+        }elseif (Str::lower($category->categoryName) === 'áo khoác'){
+            $data['productCode'] = Product::generateProductCode('AK');
         }else{
             $data['productCode'] = Product::generateProductCode('PRD');
         }
@@ -117,6 +119,8 @@ class ProductController extends Controller
             $data['productCode'] = Product::generateProductCode('QAU');
         }elseif (Str::lower($category->categoryName) === 'quần short'){
             $data['productCode'] = Product::generateProductCode('QS');
+        }elseif (Str::lower($category->categoryName) === 'áo khoác'){
+            $data['productCode'] = Product::generateProductCode('AK');
         }else{
             $data['productCode'] = Product::generateProductCode('PRD');
         }

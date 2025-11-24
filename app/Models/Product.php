@@ -48,6 +48,8 @@ class Product extends Model
             'áo thun' => 'AT',
             'quần jeans' => 'QJ',
             'quần đùi' => 'QD',
+            'áo khoác' => 'AK',
+            'quần short' => 'QS',
         ];
 
         $lastProduct = self::where('productCode', 'LIKE', $prefix . '%')

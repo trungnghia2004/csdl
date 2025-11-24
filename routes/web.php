@@ -62,7 +62,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
 
     Route::put('/product-images/{image}', [ProductImageController::class, 'update'])->name('product-images.update');
 
-    Route::get('admin/vnpay_return', [OrdersManageController::class, 'vnpayReturn'])->name('vnpay.adminReturn');
+    // Route::get('admin/vnpay_return', [OrdersManageController::class, 'vnpayReturn'])->name('vnpay.adminReturn');
 
 
 });
@@ -95,7 +95,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/orderDelivered/{id}/', [OrdersController::class, 'delivered'])->name('orders.delivered');
     Route::post('/ordersCus/{id}/cancel', [OrdersController::class, 'cancel'])->name('orderCus.cancel');
 
-    Route::get('/vnpay_return', [OrdersController::class, 'vnpayReturn'])->name('vnpay.return');
+    // Route::get('/vnpay_return', [OrdersController::class, 'vnpayReturn'])->name('vnpay.return');
     Route::get('/discount/{id}', [App\Http\Controllers\CartController::class, 'getDiscount']);
 
     Route::post('/comments', [CommentAndRateController::class, 'store'])->name('comments.store');
