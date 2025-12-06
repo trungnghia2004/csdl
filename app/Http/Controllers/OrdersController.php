@@ -84,7 +84,7 @@ class OrdersController extends Controller
             $discountProgram = DiscountProgram::where('id', $discountCode)->first();
         }
         $order = new Order();
-        $order->cusID = auth()->id();
+        $order->cusID = Auth::id();
         $order->adminID = null; // hoặc từ $request
         $order->orderPhoneNumber = $request->phone;
         $order->shipping_street = $request->street_address;
@@ -99,26 +99,74 @@ class OrdersController extends Controller
         }
         $order->save();
 
+        // Gom các productDetail trùng nhau để tránh trùng khóa chính (orderID + productDetailID)
+        $groupedDetails = [];
         foreach ($request->productDetails as $productDetail) {
-
-            OrderDetail::create([
-                'orderID' => $order->orderID,
-                'productDetailID' => $productDetail['productDetailID'],
-                'orderQuantity' => $productDetail['quantity'],
-                'unitPrice' => $productDetail['unitPrice'],
-            ]);
-            $product = ProductDetail::find($productDetail['productDetailID']);
-            if ($product) {
-                $product->productQuantity -= $productDetail['quantity'];
-                if ($product->productQuantity < 0) {
-                    $product->productQuantity = 0;
-                }
-                $product->save();
+            $key = $productDetail['productDetailID'];
+            if (!isset($groupedDetails[$key])) {
+                $groupedDetails[$key] = [
+                    'productDetailID' => $productDetail['productDetailID'],
+                    'quantity' => 0,
+                    'unitPrice' => $productDetail['unitPrice'],
+                ];
             }
+            $groupedDetails[$key]['quantity'] += $productDetail['quantity'];
+            // giữ unitPrice theo lần cuối
+            $groupedDetails[$key]['unitPrice'] = $productDetail['unitPrice'];
+        }
+
+        DB::beginTransaction();
+        try {
+            foreach ($groupedDetails as $detail) {
+                $existing = DB::selectOne(
+                    'SELECT orderQuantity FROM order_details WHERE orderID = ? AND productDetailID = ?',
+                    [$order->orderID, $detail['productDetailID']]
+                );
+
+                if ($existing) {
+                    DB::update(
+                        'UPDATE order_details SET orderQuantity = orderQuantity + ?, unitPrice = ?, updated_at = ? WHERE orderID = ? AND productDetailID = ?',
+                        [
+                            $detail['quantity'],
+                            $detail['unitPrice'],
+                            now(),
+                            $order->orderID,
+                            $detail['productDetailID'],
+                        ]
+                    );
+                } else {
+                    DB::insert(
+                        'INSERT INTO order_details (orderID, productDetailID, orderQuantity, unitPrice, created_at, updated_at)
+                         VALUES (?, ?, ?, ?, ?, ?)',
+                        [
+                            $order->orderID,
+                            $detail['productDetailID'],
+                            $detail['quantity'],
+                            $detail['unitPrice'],
+                            now(),
+                            now(),
+                        ]
+                    );
+                }
+
+                // Cập nhật tồn kho
+                $product = ProductDetail::find($detail['productDetailID']);
+                if ($product) {
+                    $product->productQuantity -= $detail['quantity'];
+                    if ($product->productQuantity < 0) {
+                        $product->productQuantity = 0;
+                    }
+                    $product->save();
+                }
+            }
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            throw $e;
         }
 
 
-        $cartID = Cart::where('userID', auth()->id())->value('cartID');
+        $cartID = Cart::where('userID', Auth::id())->value('cartID');
         CartDetail::where('cartID', $cartID)->delete();
 
         $admin = User::where('role', 'admin')->first();
@@ -144,7 +192,7 @@ class OrdersController extends Controller
             'status',
             'orderDetails.productDetail.product.images'
         ])
-            ->where('cusID', auth()->id())
+            ->where('cusID', Auth::id())
             ->orderBy('created_at', 'desc');
 
         if (!empty($status)) {
@@ -155,13 +203,13 @@ class OrdersController extends Controller
 
         $orders = $query->paginate(5)->appends($request->query());
 
-        $statusCounts = Order::where('cusID', auth()->id())
+        $statusCounts = Order::where('cusID', Auth::id())
             ->selectRaw('staID, COUNT(*) as total')
             ->groupBy('staID')
             ->pluck('total', 'staID')
             ->toArray();
 
-        $totalOrders = Order::where('cusID', auth()->id())->count();
+        $totalOrders = Order::where('cusID', Auth::id())->count();
 
         $results = [];
         foreach ($orders as $order) {
@@ -222,7 +270,7 @@ class OrdersController extends Controller
     }
     public function delivered($orderID)
     {
-        $cusID = auth()->id();
+        $cusID = Auth::id();
         $order = Order::where('orderID', $orderID)->where('cusID', $cusID)->first();
 
         $order = Order::find($orderID);
@@ -237,7 +285,7 @@ class OrdersController extends Controller
     }
     public function cancel($orderID)
     {
-        $cusID = auth()->id();
+        $cusID = Auth::id();
 
         $order = Order::with('orderDetails')->where('orderID', $orderID)->where('cusID', $cusID)->first();
 

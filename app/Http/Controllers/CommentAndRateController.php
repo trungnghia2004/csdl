@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\CommentAndRate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class CommentAndRateController extends Controller
 {
@@ -18,26 +18,38 @@ class CommentAndRateController extends Controller
 
         $user = Auth::user();
         if ($user->role !== 'customer') {
-            return response()->json(['message' => 'Chỉ khách hàng mới được bình luận.'], 403);
+            return response()->json(['message' => 'Chi khach hang moi duoc binh luan.'], 403);
         }
 
-        $comment = CommentAndRate::create([
-            'cusID' => $user->id,
-            'productID' => $request->productID,
-            'contentComment' => $request->contentComment,
-            'rate' => $request->rate,
-        ]);
+        DB::insert(
+            'INSERT INTO comment_and_rates (cusID, productID, contentComment, rate, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?)',
+            [
+                $user->id,
+                $request->productID,
+                $request->contentComment,
+                $request->rate,
+                now(),
+                now(),
+            ]
+        );
 
-        return back()->with('success', 'Bình luận đã được tạo.');
+        return back()->with('success', 'Binh luan da duoc tao.');
     }
 
 
     public function update(Request $request, $id)
     {
-        $comment = CommentAndRate::findOrFail($id);
+        $comment = DB::selectOne(
+            'SELECT * FROM comment_and_rates WHERE id = ?',
+            [$id]
+        );
+        if (!$comment) {
+            abort(404);
+        }
 
         if (Auth::id() !== $comment->cusID) {
-            return back()->withErrors(['message' => 'Bạn không có quyền sửa bình luận này.']);
+            return back()->withErrors(['message' => 'Ban khong co quyen sua binh luan nay.']);
         }
 
         $request->validate([
@@ -45,24 +57,38 @@ class CommentAndRateController extends Controller
             'rate' => 'required|integer|min:1|max:5',
         ]);
 
-        $comment->update([
-            'contentComment' => $request->contentComment,
-            'rate' => $request->rate,
-        ]);
+        DB::update(
+            'UPDATE comment_and_rates SET contentComment = ?, rate = ?, updated_at = ? WHERE id = ?',
+            [
+                $request->contentComment,
+                $request->rate,
+                now(),
+                $id,
+            ]
+        );
 
-        return back()->with('success', 'Bình luận đã được cập nhật.');
+        return back()->with('success', 'Binh luan da duoc cap nhat.');
     }
 
     public function destroy($id)
     {
-        $comment = CommentAndRate::findOrFail($id);
-
-        if (Auth::id() !== $comment->cusID) {
-            return back()->withErrors(['message' => 'Bạn không có quyền xoá bình luận này.']);
+        $comment = DB::selectOne(
+            'SELECT * FROM comment_and_rates WHERE id = ?',
+            [$id]
+        );
+        if (!$comment) {
+            abort(404);
         }
 
-        $comment->delete();
+        if (Auth::id() !== $comment->cusID) {
+            return back()->withErrors(['message' => 'Ban khong co quyen xoa binh luan nay.']);
+        }
 
-        return back()->with('success', 'Đã xoá bình luận.');
+        DB::delete(
+            'DELETE FROM comment_and_rates WHERE id = ?',
+            [$id]
+        );
+
+        return back()->with('success', 'Da xoa binh luan.');
     }
 }

@@ -12,6 +12,7 @@ use App\Notifications\NewOrderNotification;
 use App\Notifications\OrderConfirmationForCustomer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 
 class OrdersManageController extends Controller
@@ -209,7 +210,9 @@ class OrdersManageController extends Controller
         $grouped = array_chunk($products, 5);
 
         $totalPrice = 0;
+        $detailsToAdd = [];
 
+        // Gom các chi tiết sản phẩm để tránh trùng khóa chính (orderID + productDetailID)
         foreach ($grouped as $productGroup) {
             $productID = $productGroup[1]['prdID'] ?? null;
             $sizeID = $productGroup[2]['sizeId'] ?? null;
@@ -235,30 +238,77 @@ class OrdersManageController extends Controller
             }
 
             $unitPrice = $product->productSellPrice;
-            $subtotal = $unitPrice * $quantity;
-            $totalPrice += $subtotal;
+            $totalPrice += $unitPrice * $quantity;
 
-            OrderDetail::create([
-                'orderID' => $id,
-                'productDetailID' => $productDetail->id,
-                'orderQuantity' => $quantity,
-                'unitPrice' => $unitPrice
-            ]);
-        }
-
-        $order = Order::find($id);
-        if ($order) {
-            $order->staID = 4;
-            $order->totalPrice = $totalPrice;
-            $order->save();
-        }
-        $product = ProductDetail::find($productDetail->id);
-        if ($product) {
-            $product->productQuantity -= $quantity;
-            if ($product->productQuantity < 0) {
-                $product->productQuantity = 0;
+            $key = $productDetail->id;
+            if (!isset($detailsToAdd[$key])) {
+                $detailsToAdd[$key] = [
+                    'productDetailID' => $productDetail->id,
+                    'quantity' => 0,
+                    'unitPrice' => $unitPrice,
+                ];
             }
-            $product->save();
+            $detailsToAdd[$key]['quantity'] += $quantity;
+            // giữ unit price lần cuối (hoặc theo sản phẩm hiện tại)
+            $detailsToAdd[$key]['unitPrice'] = $unitPrice;
+        }
+
+        DB::beginTransaction();
+        try {
+            foreach ($detailsToAdd as $detail) {
+                $existing = DB::selectOne(
+                    'SELECT orderQuantity FROM order_details WHERE orderID = ? AND productDetailID = ?',
+                    [$id, $detail['productDetailID']]
+                );
+
+                if ($existing) {
+                    DB::update(
+                        'UPDATE order_details
+                         SET orderQuantity = orderQuantity + ?, unitPrice = ?, updated_at = ?
+                         WHERE orderID = ? AND productDetailID = ?',
+                        [
+                            $detail['quantity'],
+                            $detail['unitPrice'],
+                            now(),
+                            $id,
+                            $detail['productDetailID'],
+                        ]
+                    );
+                } else {
+                    DB::insert(
+                        'INSERT INTO order_details (orderID, productDetailID, orderQuantity, unitPrice, created_at, updated_at)
+                         VALUES (?, ?, ?, ?, ?, ?)',
+                        [
+                            $id,
+                            $detail['productDetailID'],
+                            $detail['quantity'],
+                            $detail['unitPrice'],
+                            now(),
+                            now(),
+                        ]
+                    );
+                }
+
+                $product = ProductDetail::find($detail['productDetailID']);
+                if ($product) {
+                    $product->productQuantity -= $detail['quantity'];
+                    if ($product->productQuantity < 0) {
+                        $product->productQuantity = 0;
+                    }
+                    $product->save();
+                }
+            }
+
+            $order = Order::find($id);
+            if ($order) {
+                $order->totalPrice = $totalPrice;
+                $order->save();
+            }
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            throw $e;
         }
 
         $admin = User::where('role', 'admin')->first();
@@ -269,9 +319,8 @@ class OrdersManageController extends Controller
         //     return $this->redirectToVnpay($order->totalPrice, $order->orderID);
         // }
 
-        $order->isPayment = true;
-        $order->save();
-        return redirect()->back()->with('success', 'Đã thêm chi tiết đơn hàng và cập nhật trạng thái thành công.');
+        // Khong tu dong doi trang thai thanh toan khi chi them chi tiet
+        return redirect()->back()->with('success', 'Da them chi tiet don hang va cap nhat tong tien.');
     }
 
     public function filterOrders(Request $request)
@@ -280,7 +329,12 @@ class OrdersManageController extends Controller
         $searchQuery = $request->input('search');
         $perPage = 10;
 
-        $statuses = Status::pluck('staID', 'statusValue')->toArray();
+        // Lấy map statusValue => staID bằng SQL thuần
+        $statusRows = DB::select('SELECT staID, statusValue FROM status');
+        $statuses = [];
+        foreach ($statusRows as $row) {
+            $statuses[$row->statusValue] = $row->staID;
+        }
         $statusNames = array_flip($statuses);
 
         $query = Order::with('status', 'orderDetails.productDetail.product.firstImage');

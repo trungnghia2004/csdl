@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 
@@ -33,15 +34,22 @@ class ProfileController extends Controller
             return redirect()->back()->withErrors($validator)->withInput();
         }
 
-        $user->update([
-            'name'    => $request->name,
-            'email'   => $request->email,
-            'phone'   => $request->phone,
-            'city' => $request->city,
-            'district' => $request->district,
-            'ward' => $request->ward,
-            'street_address' => $request->address,
-        ]);
+        DB::update(
+            'UPDATE users
+             SET name = ?, email = ?, phone = ?, city = ?, district = ?, ward = ?, street_address = ?, updated_at = ?
+             WHERE id = ?',
+            [
+                $request->name,
+                $request->email,
+                $request->phone,
+                $request->city,
+                $request->district,
+                $request->ward,
+                $request->street_address,
+                now(),
+                $user->id,
+            ]
+        );
 
         return redirect()->route('profile.edit')->with('success', 'Cập nhật thông tin thành công!');
     }
@@ -51,16 +59,21 @@ class ProfileController extends Controller
         $user = Auth::user();
         if (Hash::check($request->currentPassword, $user->password)) {
             $validator = Validator::make($request->all(), [
-                'password' => 'string',
+                'password' => 'required|string|min:6',
             ]);
 
             if ($validator->fails()) {
                 return redirect()->back()->withErrors($validator)->withInput();
             }
 
-            $user->update([
-                'password' => $request->password,
-            ]);
+            DB::update(
+                'UPDATE users SET password = ?, updated_at = ? WHERE id = ?',
+                [
+                    Hash::make($request->password),
+                    now(),
+                    $user->id,
+                ]
+            );
 
             return redirect()->route('profile.edit')->with('success', 'Cập nhật thông tin thành công!');
         } else {

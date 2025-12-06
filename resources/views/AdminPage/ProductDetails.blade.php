@@ -122,7 +122,14 @@
                         <!-- Product Images -->
                         <div class="product-images">
                             <div class="main-image">
-                                <img src="{{ asset('storage/' . $infoProduct->images[0]->imageLink) }}" alt="Áo Thun Cotton Premium">
+                                @php $mainImage = $infoProduct->images->first(); @endphp
+                                @if($mainImage)
+                                    <img src="{{ asset('storage/' . $mainImage->imageLink) }}" alt="Anh san pham">
+                                @else
+                                    <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #f3f4f6; border-radius: 8px; color: #6b7280;">
+                                        Chua co anh
+                                    </div>
+                                @endif
                             </div>
                             <button id="prev-btn" class="left-2">
                                 <i class="fa-solid fa-arrow-left"></i>
@@ -432,3 +439,4 @@
 <script src="{{asset('js/Admin/script.js')}}"></script>
 </body>
 </html>
+
