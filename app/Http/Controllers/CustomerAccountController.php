@@ -2,41 +2,68 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 
 class CustomerAccountController extends Controller
 {
     public function index(Request $request)
     {
         $search = $request->input('search');
+        $perPage = 10;
+        $page = max((int) $request->input('page', 1), 1);
+        $offset = ($page - 1) * $perPage;
 
-        $query = User::where('role', 'customer');
+        $whereSql = 'role = ?';
+        $bindings = ['customer'];
 
         if (!empty($search)) {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%$search%")
-                    ->orWhere('email', 'like', "%$search%");
-            });
+            $whereSql .= ' AND (name LIKE ? OR email LIKE ?)';
+            $like = '%' . $search . '%';
+            $bindings[] = $like;
+            $bindings[] = $like;
         }
 
-        $customerAccounts = $query->orderBy('id', 'desc')->paginate(10)->appends(['search' => $search]);
+        $totalRow = DB::selectOne("SELECT COUNT(*) AS aggregate FROM users WHERE $whereSql", $bindings);
+        $total = $totalRow ? (int) $totalRow->aggregate : 0;
+
+        $rows = DB::select(
+            "SELECT * FROM users WHERE $whereSql ORDER BY id DESC LIMIT ? OFFSET ?",
+            array_merge($bindings, [$perPage, $offset])
+        );
+
+        $customerAccounts = new LengthAwarePaginator(
+            $rows,
+            $total,
+            $perPage,
+            $page,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
 
         return view('AdminPage.UserAccount', compact('customerAccounts', 'search'));
     }
 
-    public function update(User $customer)
+    public function update($customerId)
     {
-        $customer->update(['isDeleted' => 0]);
-        return redirect()->route('customer.index')->with('success', 'Gỡ cấm người dùng thành công.');
+        DB::update(
+            "UPDATE users SET isDeleted = 0, updated_at = NOW() WHERE id = ?",
+            [$customerId]
+        );
+
+        return redirect()->route('customer.index')->with('success', 'Go cam nguoi dung thanh cong.');
     }
 
-    public function destroy(User $customer)
+    public function destroy($customerId)
     {
-        $customer->update(['isDeleted' => 1]);
-        return redirect()->route('customer.index')->with('success', 'Cấm người dùng thành công.');
+        DB::update(
+            "UPDATE users SET isDeleted = 1, updated_at = NOW() WHERE id = ?",
+            [$customerId]
+        );
+
+        return redirect()->route('customer.index')->with('success', 'Cam nguoi dung thanh cong.');
     }
-
-
-
 }

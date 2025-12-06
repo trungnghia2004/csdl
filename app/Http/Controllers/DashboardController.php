@@ -2,11 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use Illuminate\Http\Request;
-use App\Models\Order;
-use App\Models\Product;
-use App\Models\OrderDetail;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -19,75 +15,94 @@ class DashboardController extends Controller
         $currentDate = Carbon::now();
         $currentMonth = $selectedMonth;
         $lastMonth = $currentDate->copy()->subMonth()->month;
-        
-$topProducts = Product::select(
-        'products.productID',
-        'products.productName',
-        'products.productCode',
-        DB::raw('SUM(order_details.orderQuantity) as total_sold')
-    )
-    ->join('product_details', 'products.productID', '=', 'product_details.prdID')
-    ->join('order_details', 'product_details.id', '=', 'order_details.productDetailID')
-    ->join('orders', 'order_details.orderID', '=', 'orders.orderID')
-    ->whereMonth('orders.created_at', $currentMonth)
-    ->whereYear('orders.created_at', $currentDate->year)
-    ->where('orders.staID', 4)
-    ->groupBy('products.productID', 'products.productName', 'products.productCode')
-    ->orderByDesc('total_sold')
-    ->with('firstImage')
-    ->take(3)
-    ->get();
 
+        // Top 3 sản phẩm bán chạy trong tháng (đã giao - staID=4)
+        $topProducts = collect(DB::select(
+            "SELECT 
+                p.productID,
+                p.productName,
+                p.productCode,
+                (SELECT imageLink FROM product_images WHERE prdID = p.productID ORDER BY imageID ASC LIMIT 1) AS first_image,
+                SUM(od.orderQuantity) AS total_sold
+            FROM products p
+            JOIN product_details pd ON p.productID = pd.prdID
+            JOIN order_details od ON pd.id = od.productDetailID
+            JOIN orders o ON od.orderID = o.orderID
+            WHERE MONTH(o.created_at) = ? 
+              AND YEAR(o.created_at) = ?
+              AND o.staID = 4
+            GROUP BY p.productID, p.productName, p.productCode
+            ORDER BY total_sold DESC
+            LIMIT 3",
+            [$currentMonth, $currentDate->year]
+        ));
 
+        // Đơn gần đây kèm khách và trạng thái
+        $recentOrders = collect(DB::select(
+            "SELECT o.*, u.name AS customer_name, s.statusValue
+             FROM orders o
+             LEFT JOIN users u ON o.cusID = u.id
+             LEFT JOIN status s ON o.staID = s.statusID
+             ORDER BY o.created_at DESC
+             LIMIT 5"
+        ));
 
-        $recentOrders = Order::with(['customer', 'status'])
-            ->orderByDesc('created_at')
-            ->take(5)
-            ->get();
+        $currentRevenue = (float) (DB::selectOne(
+            "SELECT SUM(totalPrice) AS total FROM orders 
+             WHERE MONTH(created_at) = ? AND YEAR(created_at) = ? AND staID = 4",
+            [$currentMonth, $currentDate->year]
+        )->total ?? 0);
 
-        $currentRevenue = Order::whereMonth('created_at', $currentMonth)
-            ->whereYear('created_at', $currentDate->year)
-            ->where('staID', 4)
-            ->sum('totalPrice');
+        $lastRevenue = (float) (DB::selectOne(
+            "SELECT SUM(totalPrice) AS total FROM orders 
+             WHERE MONTH(created_at) = ? AND YEAR(created_at) = ? AND staID = 4",
+            [$lastMonth, $currentDate->year]
+        )->total ?? 0);
 
-        $lastRevenue = Order::whereMonth('created_at', $lastMonth)
-            ->whereYear('created_at', $currentDate->year)
-            ->where('staID', 4)
-            ->sum('totalPrice');
+        $currentOrders = (int) (DB::selectOne(
+            "SELECT COUNT(*) AS total FROM orders 
+             WHERE MONTH(created_at) = ? AND YEAR(created_at) = ?",
+            [$currentMonth, $currentDate->year]
+        )->total ?? 0);
 
-        $currentOrders = Order::whereMonth('created_at', $currentMonth)
-            ->whereYear('created_at', $currentDate->year)
-            ->count();
+        $lastOrders = (int) (DB::selectOne(
+            "SELECT COUNT(*) AS total FROM orders 
+             WHERE MONTH(created_at) = ? AND YEAR(created_at) = ?",
+            [$lastMonth, $currentDate->year]
+        )->total ?? 0);
 
-        $lastOrders = Order::whereMonth('created_at', $lastMonth)
-            ->whereYear('created_at', $currentDate->year)
-            ->count();
+        // Sản phẩm
+        $totalProducts = (int) (DB::selectOne("SELECT COUNT(*) AS total FROM products")->total ?? 0);
+        $newProducts = (int) (DB::selectOne(
+            "SELECT COUNT(*) AS total FROM products WHERE MONTH(created_at) = ?",
+            [$currentMonth]
+        )->total ?? 0);
 
-        // 4. Sản phẩm
-        $totalProducts = Product::count();
-        $newProducts = Product::whereMonth('created_at', $currentMonth)->count();
+        // Khách hàng
+        $totalCustomers = (int) (DB::selectOne(
+            "SELECT COUNT(*) AS total FROM users WHERE role = 'customer'"
+        )->total ?? 0);
 
-        // 5. Khách hàng
-        $totalCustomers = User::where('role', 'customer')->count();
-        $newCustomers = User::where('role', 'customer')
-            ->whereMonth('created_at', $currentMonth)
-            ->count();
+        $newCustomers = (int) (DB::selectOne(
+            "SELECT COUNT(*) AS total FROM users WHERE role = 'customer' AND MONTH(created_at) = ?",
+            [$currentMonth]
+        )->total ?? 0);
 
-        $lastCustomers = User::where('role', 'customer')
-            ->whereMonth('created_at', $lastMonth)
-            ->count();
+        $lastCustomers = (int) (DB::selectOne(
+            "SELECT COUNT(*) AS total FROM users WHERE role = 'customer' AND MONTH(created_at) = ?",
+            [$lastMonth]
+        )->total ?? 0);
 
-        $revenuePerDay = Order::select(
-            DB::raw('DAY(created_at) as day'),
-            DB::raw('SUM(totalPrice) as total')
-        )
-            ->whereMonth('created_at', $currentMonth)
-            ->whereYear('created_at', $currentDate->year)
-            ->where('staID', 4)
-            ->groupBy(DB::raw('DAY(created_at)'))
-            ->orderBy('day')
-            ->get()
-            ->keyBy('day');
+        // Doanh thu theo ngày trong tháng
+        $revenuePerDay = DB::select(
+            "SELECT DAY(created_at) AS day, SUM(totalPrice) AS total
+             FROM orders
+             WHERE MONTH(created_at) = ? AND YEAR(created_at) = ? AND staID = 4
+             GROUP BY DAY(created_at)
+             ORDER BY day",
+            [$currentMonth, $currentDate->year]
+        );
+        $revenuePerDay = collect($revenuePerDay)->keyBy('day');
 
         $daysInMonth = $currentDate->daysInMonth;
         $revenueLabels = [];
@@ -96,7 +111,7 @@ $topProducts = Product::select(
         for ($day = 1; $day <= $daysInMonth; $day++) {
             $label = str_pad($day, 2, '0', STR_PAD_LEFT);
             $revenueLabels[] = $label;
-            $revenueData[] = $revenuePerDay[$day]->total ?? 0;
+            $revenueData[] = (float) ($revenuePerDay[$day]->total ?? 0);
         }
 
         return view('AdminPage.Dashboard', [
@@ -119,6 +134,4 @@ $topProducts = Product::select(
             'revenueData' => $revenueData,
         ]);
     }
-
-
 }

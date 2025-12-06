@@ -2,15 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Cart;
-use App\Models\CartDetail;
-use App\Models\DiscountProgram;
-use App\Models\Order;
-use App\Models\OrderDetail;
-use App\Models\Payment;
-use App\Models\Product;
-use App\Models\ProductDetail;
-use App\Models\User;
 use App\Notifications\NewOrderNotification;
 use App\Notifications\OrderConfirmationForCustomer;
 use Illuminate\Http\Request;
@@ -23,46 +14,79 @@ class OrdersController extends Controller
 {
     public function index(Request $request)
     {
-        $cartData = json_decode($request->input('cart_data'), true);
+        $cartData = json_decode($request->input('cart_data'), true) ?: [];
         $discountCode = $request->input('discount_code');
 
         $cartDetails = [];
-
         foreach ($cartData as $item) {
-            $cartDetail = CartDetail::with(['product', 'product.firstImage','productDetail.size', 'productDetail.color'])
-                ->find($item['id']);
-            if ($cartDetail) {
-                $cartDetail->quantity = $item['quantity'];
-                $cartDetails[] = $cartDetail;
+            $row = DB::selectOne(
+                "SELECT 
+                    cd.id,
+                    cd.productDetailID,
+                    cd.quantity,
+                    pd.prdID,
+                    p.productName,
+                    p.productSellPrice,
+                    s.sizeName,
+                    c.colorName,
+                    img.imageLink AS firstImage
+                 FROM cart_details cd
+                 JOIN product_details pd ON cd.productDetailID = pd.id
+                 JOIN products p ON pd.prdID = p.productID
+                 LEFT JOIN sizes s ON pd.sizeId = s.sizeId
+                 LEFT JOIN colors c ON pd.colorId = c.colorId
+                 LEFT JOIN (
+                    SELECT pi.prdID, pi.imageLink
+                    FROM product_images pi
+                    JOIN (
+                        SELECT prdID, MIN(imageID) AS firstImageID
+                        FROM product_images
+                        GROUP BY prdID
+                    ) x ON pi.imageID = x.firstImageID
+                 ) img ON img.prdID = pd.prdID
+                 WHERE cd.id = ?",
+                [$item['id'] ?? null]
+            );
+            if ($row) {
+                $detail = new \stdClass();
+                $detail->id = $row->id;
+                $detail->productDetailID = $row->productDetailID;
+                $detail->quantity = $item['quantity'] ?? $row->quantity;
+
+                $product = new \stdClass();
+                $product->productName = $row->productName;
+                $product->productSellPrice = $row->productSellPrice;
+                $product->firstImage = $row->firstImage ? (object)['imageLink' => $row->firstImage] : null;
+
+                $productDetail = new \stdClass();
+                $productDetail->id = $row->productDetailID;
+                $productDetail->prdID = $row->prdID;
+                $productDetail->product = $product;
+                $productDetail->size = $row->sizeName ? (object)['sizeName' => $row->sizeName] : null;
+                $productDetail->color = $row->colorName ? (object)['colorName' => $row->colorName] : null;
+
+                $detail->productDetail = $productDetail;
+                $cartDetails[] = $detail;
             }
         }
 
         $subtotal = 0;
         foreach ($cartDetails as $detail) {
-            $price = $detail->productDetail?->product->productSellPrice ?? 0;
+            $price = $detail->productDetail->product->productSellPrice ?? 0;
             $quantity = $detail->quantity;
             $subtotal += $price * $quantity;
         }
 
         $discountValue = 0;
-
-
         if (!empty($discountCode)) {
-            $program = DiscountProgram::find($discountCode);
-            $discountValue = $program->calculateDiscount($subtotal);
-            $total = $subtotal - $discountValue;
-        } else {
-            $discountValue = 0;
-            $total = $subtotal;
+            $program = DB::selectOne("SELECT * FROM discount_programs WHERE id = ?", [$discountCode]);
+            if ($program) {
+                $discountValue = $this->calculateDiscount($program, $subtotal);
+            }
         }
 
-        $total = $subtotal - $discountValue;
-
-        if ($total < 0) {
-            $total = 0;
-        }
-
-        $payments = Payment::all();
+        $total = max(0, $subtotal - $discountValue);
+        $payments = collect(DB::select("SELECT * FROM payments"));
 
         return view('UserPage.Checkout', compact(
             'cartDetails',
@@ -79,48 +103,51 @@ class OrdersController extends Controller
     {
         $discountCode = $request->discountCode;
         $discountProgram = null;
-
         if (!empty($discountCode)) {
-            $discountProgram = DiscountProgram::where('id', $discountCode)->first();
-        }
-        $order = new Order();
-        $order->cusID = Auth::id();
-        $order->adminID = null; // hoặc từ $request
-        $order->orderPhoneNumber = $request->phone;
-        $order->shipping_street = $request->street_address;
-        $order->shipping_city = $request->city;
-        $order->shipping_district = $request->district;
-        $order->shipping_ward = $request->ward;
-        $order->payID = $request->payment;
-        $order->staID = 1;
-        $order->totalPrice = $request->total ?? 0;
-        if ($discountProgram) {
-            $order->discount_program_id = $discountProgram->id;
-        }
-        $order->save();
-
-        // Gom các productDetail trùng nhau để tránh trùng khóa chính (orderID + productDetailID)
-        $groupedDetails = [];
-        foreach ($request->productDetails as $productDetail) {
-            $key = $productDetail['productDetailID'];
-            if (!isset($groupedDetails[$key])) {
-                $groupedDetails[$key] = [
-                    'productDetailID' => $productDetail['productDetailID'],
-                    'quantity' => 0,
-                    'unitPrice' => $productDetail['unitPrice'],
-                ];
-            }
-            $groupedDetails[$key]['quantity'] += $productDetail['quantity'];
-            // giữ unitPrice theo lần cuối
-            $groupedDetails[$key]['unitPrice'] = $productDetail['unitPrice'];
+            $discountProgram = DB::selectOne("SELECT * FROM discount_programs WHERE id = ?", [$discountCode]);
         }
 
+        $now = now();
         DB::beginTransaction();
         try {
+            DB::insert(
+                "INSERT INTO orders (cusID, adminID, orderPhoneNumber, shipping_street, shipping_city, shipping_district, shipping_ward, payID, staID, totalPrice, discount_program_id, created_at, updated_at, isPayment)
+                 VALUES (?, NULL, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, 0)",
+                [
+                    Auth::id(),
+                    $request->phone,
+                    $request->street_address,
+                    $request->city,
+                    $request->district,
+                    $request->ward,
+                    $request->payment,
+                    $request->total ?? 0,
+                    $discountProgram->id ?? null,
+                    $now,
+                    $now,
+                ]
+            );
+            $orderId = DB::getPdo()->lastInsertId();
+
+            // Gom productDetail trùng
+            $groupedDetails = [];
+            foreach ($request->productDetails as $productDetail) {
+                $key = $productDetail['productDetailID'];
+                if (!isset($groupedDetails[$key])) {
+                    $groupedDetails[$key] = [
+                        'productDetailID' => $productDetail['productDetailID'],
+                        'quantity' => 0,
+                        'unitPrice' => $productDetail['unitPrice'],
+                    ];
+                }
+                $groupedDetails[$key]['quantity'] += $productDetail['quantity'];
+                $groupedDetails[$key]['unitPrice'] = $productDetail['unitPrice'];
+            }
+
             foreach ($groupedDetails as $detail) {
                 $existing = DB::selectOne(
                     'SELECT orderQuantity FROM order_details WHERE orderID = ? AND productDetailID = ?',
-                    [$order->orderID, $detail['productDetailID']]
+                    [$orderId, $detail['productDetailID']]
                 );
 
                 if ($existing) {
@@ -129,8 +156,8 @@ class OrdersController extends Controller
                         [
                             $detail['quantity'],
                             $detail['unitPrice'],
-                            now(),
-                            $order->orderID,
+                            $now,
+                            $orderId,
                             $detail['productDetailID'],
                         ]
                     );
@@ -139,43 +166,49 @@ class OrdersController extends Controller
                         'INSERT INTO order_details (orderID, productDetailID, orderQuantity, unitPrice, created_at, updated_at)
                          VALUES (?, ?, ?, ?, ?, ?)',
                         [
-                            $order->orderID,
+                            $orderId,
                             $detail['productDetailID'],
                             $detail['quantity'],
                             $detail['unitPrice'],
-                            now(),
-                            now(),
+                            $now,
+                            $now,
                         ]
                     );
                 }
 
                 // Cập nhật tồn kho
-                $product = ProductDetail::find($detail['productDetailID']);
-                if ($product) {
-                    $product->productQuantity -= $detail['quantity'];
-                    if ($product->productQuantity < 0) {
-                        $product->productQuantity = 0;
-                    }
-                    $product->save();
-                }
+                DB::update(
+                    "UPDATE product_details 
+                     SET productQuantity = GREATEST(productQuantity - ?, 0), updated_at = ?
+                     WHERE id = ?",
+                    [$detail['quantity'], $now, $detail['productDetailID']]
+                );
             }
+
+            // Xóa giỏ hàng của user
+            $cartRow = DB::selectOne('SELECT cartID FROM cart WHERE userID = ?', [Auth::id()]);
+            if ($cartRow) {
+                DB::delete('DELETE FROM cart_details WHERE cartID = ?', [$cartRow->cartID]);
+            }
+
             DB::commit();
         } catch (\Throwable $e) {
             DB::rollBack();
             throw $e;
         }
 
-
-        $cartID = Cart::where('userID', Auth::id())->value('cartID');
-        CartDetail::where('cartID', $cartID)->delete();
-
-        $admin = User::where('role', 'admin')->first();
-        Notification::route('mail', $admin->email)->notify(new NewOrderNotification($order));
-
-        $order->customer->notify(new OrderConfirmationForCustomer($order));
-        // if ($request->payment == 2) {
-        //     return $this->redirectToVnpay($order->totalPrice, $order->orderID);
-        // }
+        // Gửi thông báo: cần model Order cho notification type-hint
+        $orderModel = \App\Models\Order::find($orderId);
+        if ($orderModel) {
+            $admin = DB::selectOne("SELECT email FROM users WHERE role = 'admin' LIMIT 1");
+            if ($admin && $admin->email) {
+                Notification::route('mail', $admin->email)->notify(new NewOrderNotification($orderModel));
+            }
+            $customerEmail = DB::selectOne("SELECT email FROM users WHERE id = ?", [Auth::id()]);
+            if ($customerEmail && $customerEmail->email) {
+                Notification::route('mail', $customerEmail->email)->notify(new OrderConfirmationForCustomer($orderModel));
+            }
+        }
 
         return redirect()->route('customerPage')->with('success', 'Đơn hàng đã được tạo thành công!');
     }
@@ -184,60 +217,118 @@ class OrdersController extends Controller
 
     public function showOrders(Request $request)
     {
-        $keyword = $request->input('keyword');
         $status = $request->input('statusID');
+        $keyword = $request->input('keyword');
+        $perPage = 5;
+        $page = max((int) $request->input('page', 1), 1);
+        $offset = ($page - 1) * $perPage;
 
-        $query = Order::with([
-            'customer',
-            'status',
-            'orderDetails.productDetail.product.images'
-        ])
-            ->where('cusID', Auth::id())
-            ->orderBy('created_at', 'desc');
-
+        $where = 'o.cusID = ?';
+        $bindings = [Auth::id()];
         if (!empty($status)) {
-            $query->whereHas('status', function ($q) use ($status) {
-                $q->where('staID', $status);
-            });
+            $where .= ' AND o.staID = ?';
+            $bindings[] = $status;
+        }
+        if (!empty($keyword)) {
+            $where .= ' AND o.orderID LIKE ?';
+            $bindings[] = '%' . $keyword . '%';
         }
 
-        $orders = $query->paginate(5)->appends($request->query());
+        $totalRow = DB::selectOne("SELECT COUNT(*) AS aggregate FROM orders o WHERE $where", $bindings);
+        $total = $totalRow ? (int) $totalRow->aggregate : 0;
 
-        $statusCounts = Order::where('cusID', Auth::id())
-            ->selectRaw('staID, COUNT(*) as total')
-            ->groupBy('staID')
-            ->pluck('total', 'staID')
-            ->toArray();
+        $orders = DB::select(
+            "SELECT o.*, s.statusValue
+             FROM orders o
+             LEFT JOIN status s ON o.staID = s.statusID
+             WHERE $where
+             ORDER BY o.created_at DESC
+             LIMIT ? OFFSET ?",
+            array_merge($bindings, [$perPage, $offset])
+        );
 
-        $totalOrders = Order::where('cusID', Auth::id())->count();
+        // Lấy order_details + sản phẩm ảnh để hiển thị ảnh
+        $orderIds = array_map(fn($o) => $o->orderID, $orders);
+        $details = [];
+        if ($orderIds) {
+            $placeholders = implode(',', array_fill(0, count($orderIds), '?'));
+            $details = DB::select(
+                "SELECT od.*, pd.prdID, p.productName,
+                        (SELECT imageLink FROM product_images WHERE prdID = p.productID ORDER BY imageID ASC LIMIT 1) AS firstImage
+                 FROM order_details od
+                 JOIN product_details pd ON od.productDetailID = pd.id
+                 JOIN products p ON pd.prdID = p.productID
+                 WHERE od.orderID IN ($placeholders)",
+                $orderIds
+            );
+        }
+        $detailsByOrder = [];
+        foreach ($details as $d) {
+            $detailsByOrder[$d->orderID][] = $d;
+        }
 
         $results = [];
         foreach ($orders as $order) {
             $productImages = [];
-            $product = null;
-
-            foreach ($order->orderDetails as $detail) {
-                $product = $detail->productDetail->product ?? null;
-                $image = $product->images->first()->imageLink ?? null;
-                if ($image) $productImages[] = $image;
+            $productCount = 0;
+            $firstProductId = null;
+            if (!empty($detailsByOrder[$order->orderID])) {
+                foreach ($detailsByOrder[$order->orderID] as $detail) {
+                    if ($detail->firstImage) {
+                        $productImages[] = $detail->firstImage;
+                    }
+                    $productCount += $detail->orderQuantity;
+                    if ($firstProductId === null && isset($detail->prdID)) {
+                        $firstProductId = $detail->prdID;
+                    }
+                }
             }
 
             $results[] = [
                 'orderID' => $order->orderID,
                 'payStatus' => $order->isPayment,
-                'orderCode' => '#ORD-' . $order->created_at->format('Y-m-d') . '-' . $order->orderID,
-                'orderDate' => $order->created_at->format('d/m/Y \l\ú\c H:i'),
+                'orderCode' => '#ORD-' . Carbon::parse($order->created_at)->format('Y-m-d') . '-' . $order->orderID,
+                'orderDate' => Carbon::parse($order->created_at)->format('d/m/Y \l\ú H:i'),
                 'expectedDelivery' => Carbon::parse($order->created_at)->addDays(3)->format('d/m/Y') . ' - ' . Carbon::parse($order->created_at)->addDays(5)->format('d/m/Y'),
-                'status' => $order->status->statusValue ?? 'Không rõ',
-                'statusClass' => $this->getStatusClass($order->status->statusValue ?? ''),
+                'status' => $order->statusValue ?? 'Không rõ',
+                'statusClass' => $this->getStatusClass($order->statusValue ?? ''),
                 'totalPrice' => number_format($order->totalPrice, 0, ',', '.') . 'đ',
-                'productCount' => $order->orderDetails->sum('orderQuantity'),
+                'productCount' => $productCount,
                 'productImages' => $productImages,
-                'product' => $product,
+                'product' => $firstProductId ? (object)['productID' => $firstProductId] : null,
             ];
         }
 
-        return view('UserPage.order-list', compact('results', 'orders', 'keyword', 'statusCounts', 'totalOrders'));
+        // Thống kê trạng thái
+        $statusCountsRows = DB::select(
+            "SELECT staID, COUNT(*) AS total FROM orders WHERE cusID = ? GROUP BY staID",
+            [Auth::id()]
+        );
+        $statusCounts = [];
+        foreach ($statusCountsRows as $row) {
+            $statusCounts[$row->staID] = $row->total;
+        }
+        $totalOrders = $total;
+
+        $ordersPaginator = new \Illuminate\Pagination\LengthAwarePaginator(
+            $orders,
+            $total,
+            $perPage,
+            $page,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
+
+        return view('UserPage.order-list', [
+            'results' => $results,
+            'orders' => $ordersPaginator,
+            'status' => $status,
+            'statusCounts' => $statusCounts,
+            'totalOrders' => $totalOrders,
+            'keyword' => $keyword,
+        ]);
     }
 
 
@@ -247,47 +338,110 @@ class OrdersController extends Controller
             'Đang chờ duyệt'   => 'status-pending',
             'Đã duyệt'         => 'status-approved',
             'Đang giao hàng'   => 'status-shipping',
-            'Đã giao hàng'          => 'status-delivered',
+            'Đã giao hàng'     => 'status-delivered',
             'Đã hủy'           => 'status-cancelled',
             default            => 'status-default',
         };
 
     }
+
     public function showDetails($orderID)
     {
-        $order = Order::with([
-            'customer',
-            'admin',
-            'status',
-            'payment',
-            'orderDetails.productDetail.product',
-            'orderDetails.productDetail.size',
-            'orderDetails.productDetail.color',
-        ])->findOrFail($orderID);
+        $order = DB::selectOne(
+            "SELECT o.*, 
+                    cu.name AS customer_name, cu.email AS customer_email, cu.phone AS customer_phone,
+                    ad.name AS admin_name,
+                    s.statusValue,
+                    p.payMethod
+             FROM orders o
+             LEFT JOIN users cu ON o.cusID = cu.id
+             LEFT JOIN users ad ON o.adminID = ad.id
+             LEFT JOIN status s ON o.staID = s.statusID
+             LEFT JOIN payments p ON o.payID = p.paymentID
+             WHERE o.orderID = ?",
+            [$orderID]
+        );
+        if (!$order) {
+            abort(404);
+        }
 
+        $details = DB::select(
+            "SELECT od.*, pd.prdID, pd.sizeId, pd.colorId,
+                    pr.productName, pr.productSellPrice,
+                    s.sizeName, c.colorName,
+                    img.imageLink AS firstImage
+             FROM order_details od
+             JOIN product_details pd ON od.productDetailID = pd.id
+             JOIN products pr ON pd.prdID = pr.productID
+             LEFT JOIN sizes s ON pd.sizeId = s.sizeId
+             LEFT JOIN colors c ON pd.colorId = c.colorId
+             LEFT JOIN (
+                SELECT pi.prdID, pi.imageLink
+                FROM product_images pi
+                JOIN (
+                    SELECT prdID, MIN(imageID) AS firstImageID
+                    FROM product_images
+                    GROUP BY prdID
+                ) x ON pi.imageID = x.firstImageID
+             ) img ON img.prdID = pr.productID
+             WHERE od.orderID = ?",
+            [$orderID]
+        );
 
-        return view('UserPage.orders-details', compact('order'));
+        $orderObj = new \stdClass();
+        foreach ($order as $k => $v) {
+            $orderObj->{$k} = $v;
+        }
+        $orderObj->customer = (object)[
+            'name' => $order->customer_name,
+            'email' => $order->customer_email,
+            'phone' => $order->customer_phone,
+        ];
+        $orderObj->admin = $order->admin_name ? (object)['name' => $order->admin_name] : null;
+        $orderObj->status = (object)['statusValue' => $order->statusValue];
+        $orderObj->payment = (object)['payMethod' => $order->payMethod];
+        // Không có quan hệ discount, đặt null để view không lỗi
+        $orderObj->discount = null;
+
+        $orderObj->orderDetails = collect($details)->map(function ($row) {
+            $detail = new \stdClass();
+            foreach ($row as $k => $v) {
+                $detail->{$k} = $v;
+            }
+            $detail->productDetail = (object)[
+                'product' => (object)[
+                    'productName' => $row->productName,
+                    'productSellPrice' => $row->productSellPrice,
+                    'firstImage' => $row->firstImage ? (object)['imageLink' => $row->firstImage] : null,
+                ],
+                'size' => $row->sizeName ? (object)['sizeName' => $row->sizeName] : null,
+                'color' => $row->colorName ? (object)['colorName' => $row->colorName] : null,
+            ];
+            return $detail;
+        });
+
+        return view('UserPage.orders-details', ['order' => $orderObj]);
     }
+
     public function delivered($orderID)
     {
         $cusID = Auth::id();
-        $order = Order::where('orderID', $orderID)->where('cusID', $cusID)->first();
-
-        $order = Order::find($orderID);
-        if ($order) {
-            $order->isPayment = true;
-            $order->save();
-        }
-        $order->staID = 4;
-        $order->save();
+        DB::update(
+            "UPDATE orders SET isPayment = 1, staID = 4, updated_at = ? WHERE orderID = ? AND cusID = ?",
+            [now(), $orderID, $cusID]
+        );
 
         return redirect()->route('orders.showOrders')->with('success', "Xác nhận thành công. Cảm ơn quý khách.");
     }
+
     public function cancel($orderID)
     {
         $cusID = Auth::id();
 
-        $order = Order::with('orderDetails')->where('orderID', $orderID)->where('cusID', $cusID)->first();
+        $order = DB::selectOne(
+            "SELECT * FROM orders WHERE orderID = ? AND cusID = ?",
+            [$orderID, $cusID]
+        );
 
         if (!$order) {
             return back()->with('error', 'Không tìm thấy đơn hàng hoặc bạn không có quyền hủy đơn này.');
@@ -297,19 +451,39 @@ class OrdersController extends Controller
             return back()->with('error', 'Chỉ có thể hủy đơn hàng đang chờ xử lý.');
         }
 
-        foreach ($order->orderDetails as $detail) {
-            $productDetail = ProductDetail::find($detail->productDetailID);
-            if ($productDetail) {
-                $productDetail->productQuantity += $detail->orderQuantity;
-                $productDetail->save();
-            }
+        // Hoàn lại tồn kho
+        $details = DB::select(
+            "SELECT productDetailID, orderQuantity FROM order_details WHERE orderID = ?",
+            [$orderID]
+        );
+        foreach ($details as $detail) {
+            DB::update(
+                "UPDATE product_details SET productQuantity = productQuantity + ?, updated_at = ? WHERE id = ?",
+                [$detail->orderQuantity, now(), $detail->productDetailID]
+            );
         }
 
-        $order->staID = 5;
-        $order->save();
+        DB::update(
+            "UPDATE orders SET staID = 5, updated_at = ? WHERE orderID = ?",
+            [now(), $orderID]
+        );
 
-        return back()->with('success', "Đơn hàng của quý khách đã được hủy và sản phẩm đã hoàn lại kho.");
+        return back()->with('success', "Đơn hàng #$orderID đã được hủy và hoàn lại kho.");
     }
 
+    private function calculateDiscount($program, $amount)
+    {
+        $discount = 0;
+        if (($program->discount_type ?? '') === 'percent') {
+            $discount = $amount * (($program->discount_value ?? 0) / 100);
+        } else {
+            $discount = (float) ($program->discount_value ?? 0);
+        }
 
+        if (!empty($program->max_discount)) {
+            $discount = min($discount, (float) $program->max_discount);
+        }
+
+        return $discount;
+    }
 }

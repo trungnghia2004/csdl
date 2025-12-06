@@ -3,23 +3,45 @@
 namespace App\Http\Controllers;
 
 
-use App\Models\Category;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 
 class CategoriesController extends Controller
 {
     public function index(Request $request)
     {
         $search = $request->input('search');
+        $perPage = 10;
+        $page = max((int) $request->input('page', 1), 1);
+        $offset = ($page - 1) * $perPage;
 
-        $query = Category::where('isDeleted', false);
+        $whereSql = 'isDeleted = 0';
+        $bindings = [];
 
         if ($search) {
-            $query->where('categoryName', 'LIKE', "%$search%");
+            $whereSql .= ' AND categoryName LIKE ?';
+            $bindings[] = '%' . $search . '%';
         }
 
-        $categories = $query->paginate(10);
-        $total= $query->count();
+        $totalRow = DB::selectOne("SELECT COUNT(*) AS aggregate FROM categories WHERE $whereSql", $bindings);
+        $total = $totalRow ? (int) $totalRow->aggregate : 0;
+
+        $rows = DB::select(
+            "SELECT * FROM categories WHERE $whereSql ORDER BY categoryID DESC LIMIT ? OFFSET ?",
+            array_merge($bindings, [$perPage, $offset])
+        );
+
+        $categories = new LengthAwarePaginator(
+            $rows,
+            $total,
+            $perPage,
+            $page,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
 
         return view('AdminPage.Categories', compact('categories', 'search','total'));
     }
@@ -38,17 +60,31 @@ class CategoriesController extends Controller
             $data['categoryImage'] = $request->file('categoryImage')->store('categories', 'public');
         }
 
-        Category::create($data);
+        DB::insert(
+            'INSERT INTO categories (categoryName, categoryDesc, categoryImage, created_at, updated_at, isDeleted)
+             VALUES (?, ?, ?, ?, ?, 0)',
+            [
+                $data['categoryName'],
+                $data['categoryDesc'] ?? null,
+                $data['categoryImage'] ?? null,
+                now(),
+                now(),
+            ]
+        );
 
         return redirect()->route('categories.index')->with('success', 'Category created successfully.');
     }
 
-    public function edit(Category $category)
+    public function edit($id)
     {
+        $category = DB::selectOne('SELECT * FROM categories WHERE categoryID = ?', [$id]);
+        if (!$category) {
+            abort(404);
+        }
         return view('categories.edit', compact('category'));
     }
 
-    public function update(Request $request, Category $category)
+    public function update(Request $request, $id)
     {
         $request->validate([
             'categoryName' => 'required',
@@ -61,15 +97,28 @@ class CategoriesController extends Controller
             $data['categoryImage'] = $request->file('categoryImage')->store('categories', 'public');
         }
 
-        $category->update($data);
+        DB::update(
+            'UPDATE categories 
+             SET categoryName = ?, categoryDesc = ?, categoryImage = ?, updated_at = ?
+             WHERE categoryID = ?',
+            [
+                $data['categoryName'],
+                $data['categoryDesc'] ?? null,
+                $data['categoryImage'] ?? null,
+                now(),
+                $id,
+            ]
+        );
 
         return redirect()->route('categories.index')->with('success', 'Category updated successfully.');
     }
 
-    public function destroy(Category $category)
+    public function destroy($id)
     {
-        $category->update(['isDeleted' => 1]);
+        DB::update(
+            'UPDATE categories SET isDeleted = 1, updated_at = ? WHERE categoryID = ?',
+            [now(), $id]
+        );
         return redirect()->route('categories.index')->with('success', 'Category deleted (soft) successfully.');
     }
 }
-

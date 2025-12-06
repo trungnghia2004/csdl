@@ -122,9 +122,17 @@
                         <!-- Product Images -->
                         <div class="product-images">
                             <div class="main-image">
-                                @php $mainImage = $infoProduct->images->first(); @endphp
-                                @if($mainImage)
-                                    <img src="{{ asset('storage/' . $mainImage->imageLink) }}" alt="Anh san pham">
+                                @php 
+                                    $firstImageLink = null;
+                                    if (is_array($infoProduct->images)) {
+                                        $firstImageLink = $infoProduct->images[0]->imageLink ?? null;
+                                    } elseif (is_object($infoProduct->images) && method_exists($infoProduct->images, 'first')) {
+                                        $firstImage = $infoProduct->images->first();
+                                        $firstImageLink = $firstImage->imageLink ?? null;
+                                    }
+                                @endphp
+                                @if($firstImageLink)
+                                    <img src="{{ asset('storage/' . $firstImageLink) }}" alt="Anh san pham">
                                 @else
                                     <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #f3f4f6; border-radius: 8px; color: #6b7280;">
                                         Chua co anh
@@ -177,7 +185,7 @@
                                 </div>
                                 <div class="meta-item">
                                     <label>Danh Mục</label>
-                                    <span> {{$infoProduct -> category -> categoryName}}</span>
+                                    <span> {{$infoProduct->category->categoryName ?? ($infoProduct->categoryName ?? 'N/A')}}</span>
                                 </div>
                                 <div class="meta-item">
                                     <label>Giá Bán</label>

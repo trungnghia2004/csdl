@@ -21,18 +21,22 @@ class CommentAndRateController extends Controller
             return response()->json(['message' => 'Chi khach hang moi duoc binh luan.'], 403);
         }
 
-        DB::insert(
-            'INSERT INTO comment_and_rates (cusID, productID, contentComment, rate, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?)',
-            [
-                $user->id,
-                $request->productID,
-                $request->contentComment,
-                $request->rate,
-                now(),
-                now(),
-            ]
-        );
+        try {
+            DB::insert(
+                'INSERT INTO comment_and_rate (cusID, productID, contentComment, rate, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?)',
+                [
+                    $user->id,
+                    $request->productID,
+                    $request->contentComment,
+                    $request->rate,
+                    now(),
+                    now(),
+                ]
+            );
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Bảng comment_and_rates chưa sẵn sàng. Vui lòng migrate cơ sở dữ liệu.');
+        }
 
         return back()->with('success', 'Binh luan da duoc tao.');
     }
@@ -40,10 +44,14 @@ class CommentAndRateController extends Controller
 
     public function update(Request $request, $id)
     {
-        $comment = DB::selectOne(
-            'SELECT * FROM comment_and_rates WHERE id = ?',
-            [$id]
-        );
+        try {
+            $comment = DB::selectOne(
+                'SELECT * FROM comment_and_rate WHERE id = ?',
+                [$id]
+            );
+        } catch (\Throwable $e) {
+            return back()->withErrors(['message' => 'Bảng comment_and_rates chưa sẵn sàng. Vui lòng migrate cơ sở dữ liệu.']);
+        }
         if (!$comment) {
             abort(404);
         }
@@ -57,25 +65,33 @@ class CommentAndRateController extends Controller
             'rate' => 'required|integer|min:1|max:5',
         ]);
 
-        DB::update(
-            'UPDATE comment_and_rates SET contentComment = ?, rate = ?, updated_at = ? WHERE id = ?',
-            [
-                $request->contentComment,
-                $request->rate,
-                now(),
-                $id,
-            ]
-        );
+        try {
+            DB::update(
+                'UPDATE comment_and_rate SET contentComment = ?, rate = ?, updated_at = ? WHERE id = ?',
+                [
+                    $request->contentComment,
+                    $request->rate,
+                    now(),
+                    $id,
+                ]
+            );
+        } catch (\Throwable $e) {
+            return back()->withErrors(['message' => 'Bảng comment_and_rates chưa sẵn sàng. Vui lòng migrate cơ sở dữ liệu.']);
+        }
 
         return back()->with('success', 'Binh luan da duoc cap nhat.');
     }
 
     public function destroy($id)
     {
-        $comment = DB::selectOne(
-            'SELECT * FROM comment_and_rates WHERE id = ?',
-            [$id]
-        );
+        try {
+            $comment = DB::selectOne(
+                'SELECT * FROM comment_and_rate WHERE id = ?',
+                [$id]
+            );
+        } catch (\Throwable $e) {
+            return back()->withErrors(['message' => 'Bảng comment_and_rates chưa sẵn sàng. Vui lòng migrate cơ sở dữ liệu.']);
+        }
         if (!$comment) {
             abort(404);
         }
@@ -84,10 +100,14 @@ class CommentAndRateController extends Controller
             return back()->withErrors(['message' => 'Ban khong co quyen xoa binh luan nay.']);
         }
 
-        DB::delete(
-            'DELETE FROM comment_and_rates WHERE id = ?',
-            [$id]
-        );
+        try {
+            DB::delete(
+                'DELETE FROM comment_and_rate WHERE id = ?',
+                [$id]
+            );
+        } catch (\Throwable $e) {
+            return back()->withErrors(['message' => 'Bảng comment_and_rates chưa sẵn sàng. Vui lòng migrate cơ sở dữ liệu.']);
+        }
 
         return back()->with('success', 'Da xoa binh luan.');
     }

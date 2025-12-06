@@ -308,36 +308,6 @@
                 </form>
                 <br>
 
-                <!-- Features -->
-                <div class="border-t border-gray-200 pt-6">
-                    <h3 class="text-gray-800 font-medium mb-3">Đặc điểm sản phẩm</h3>
-                    <ul class="space-y-2">
-                        <li class="flex items-start">
-                            <div class="h-5 w-5 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center mr-2 mt-0.5">
-                                <i class="fas fa-chevron-right text-xs"></i>
-                            </div>
-                            <span class="text-gray-600">Chất liệu: 100% cotton cao cấp</span>
-                        </li>
-                        <li class="flex items-start">
-                            <div class="h-5 w-5 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center mr-2 mt-0.5">
-                                <i class="fas fa-chevron-right text-xs"></i>
-                            </div>
-                            <span class="text-gray-600">Form: Oversize rộng rãi, thoải mái</span>
-                        </li>
-                        <li class="flex items-start">
-                            <div class="h-5 w-5 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center mr-2 mt-0.5">
-                                <i class="fas fa-chevron-right text-xs"></i>
-                            </div>
-                            <span class="text-gray-600">Họa tiết: In cao cấp, bền màu</span>
-                        </li>
-                        <li class="flex items-start">
-                            <div class="h-5 w-5 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center mr-2 mt-0.5">
-                                <i class="fas fa-chevron-right text-xs"></i>
-                            </div>
-                            <span class="text-gray-600">Xuất xứ: Việt Nam</span>
-                        </li>
-                    </ul>
-                </div>
             </div>
         </div>
     </div>
