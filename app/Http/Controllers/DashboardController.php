@@ -22,6 +22,7 @@ class DashboardController extends Controller
                 p.productID,
                 p.productName,
                 p.productCode,
+                p.productSellPrice,
                 (SELECT imageLink FROM product_images WHERE prdID = p.productID ORDER BY imageID ASC LIMIT 1) AS first_image,
                 SUM(od.orderQuantity) AS total_sold
             FROM products p
@@ -31,11 +32,14 @@ class DashboardController extends Controller
             WHERE MONTH(o.created_at) = ? 
               AND YEAR(o.created_at) = ?
               AND o.staID = 4
-            GROUP BY p.productID, p.productName, p.productCode
+            GROUP BY p.productID, p.productName, p.productCode, p.productSellPrice, first_image
             ORDER BY total_sold DESC
             LIMIT 3",
             [$currentMonth, $currentDate->year]
-        ));
+        ))->map(function ($row) {
+            $row->firstImage = $row->first_image ? (object)['imageLink' => $row->first_image] : null;
+            return $row;
+        });
 
         // Đơn gần đây kèm khách và trạng thái
         $recentOrders = collect(DB::select(

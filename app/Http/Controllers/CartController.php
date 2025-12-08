@@ -64,8 +64,6 @@ class CartController extends Controller
             WHERE cd.cartID = ?",
             [$cartRow->cartID]
         ));
-
-        // Chuyển đổi sang cấu trúc object giống Eloquent
         $cartDetails = $cartDetails->map(function ($row) {
             $detail = new \stdClass();
             $detail->id = $row->id;
@@ -98,7 +96,7 @@ class CartController extends Controller
 
         $discountAmount = 0;
         if ($programs->isNotEmpty()) {
-            // áp dụng chương trình đầu tiên (hoặc bạn có thể chọn logic khác)
+            // áp dụng chương trình đầu tiên (hoặc có thể chọn logic khác)
             $program = $programs->first();
             $discountAmount = $this->calculateDiscount($program, $subtotal);
         }
